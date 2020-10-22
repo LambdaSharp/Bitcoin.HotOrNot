@@ -1,0 +1,98 @@
+@*
+ * Default index page
+ *@
+
+@page "/"
+
+@inherits ALambdaComponent
+
+@inject LambdaSharp.App.LambdaSharpEventBusClient EventBus
+
+<Container Fluid="true">
+    <Card Margin="Margin.Is4.FromTop">
+        <CardHeader Padding="Padding.Is1.FromBottom">
+            <Heading Size="HeadingSize.Is4">Bitcoin Price</Heading>
+        </CardHeader>
+        <CardBody Padding="Padding.Is0.FromBottom">
+            <CardTitle Size="5">@BitcoinPrice</CardTitle>
+        </CardBody>
+        <CardBody>
+            <Button Size="ButtonSize.Large" Color="Color.Primary" Clicked="@OnUpVoteClicked" Disabled="@IsDisabled">
+                <Icon Name="IconName.ThumbsUp" /><br/>(@UpVotes)
+            </Button>
+            <Button Size="ButtonSize.Large" Color="Color.Primary" Clicked="@OnDownVoteClicked" Disabled="@IsDisabled">
+                <Icon Name="IconName.ThumbsDown" /><br/>(@DownVotes)
+            </Button>
+        </CardBody>
+    </Card>
+</Container>
+
+@code {
+
+    //--- Properties ---
+    protected string BitcoinPrice { get; set; } = "(waiting for price)";
+    protected bool IsDisabled { get; set; } = true;
+    protected int UpVotes { get; set; }
+    protected int DownVotes { get; set; }
+    private Dictionary<string, bool> _votes = new Dictionary<string, bool>();
+
+    //--- Methods ---
+    protected override void OnInitialized() {
+        base.OnInitialized();
+
+        // subscribe to price and vote events
+        EventBus.SubscribeTo<BitcoinPriceEvent>(
+            "Bitcoin.HotOrNot::PublishBitcoinPriceFunction",
+            OnBitcoinPrice
+        );
+        EventBus.SubscribeTo<BitcoinVoteEvent>(
+            "Bitcoin.HotOrNot::VoteApp",
+            OnBitcoinVote
+        );
+    }
+
+    protected void OnBitcoinPrice(BitcoinPriceEvent priceEvent) {
+
+        // update price information
+        BitcoinPrice = priceEvent.Price.ToString("C2");
+
+        // enable voting buttons
+        IsDisabled = false;
+
+        // refresh UI state
+        StateHasChanged();
+    }
+
+    protected void OnBitcoinVote(BitcoinVoteEvent voteEvent) {
+
+        // register vote by voter ID
+        _votes[voteEvent.VoterId] = voteEvent.Vote;
+
+        // counte up/down votes
+        UpVotes = _votes.Values.Count(vote => vote);
+        DownVotes = _votes.Values.Count(vote => !vote);
+
+        // refresh UI state
+        StateHasChanged();
+    }
+
+    protected void OnUpVoteClicked() {
+        LogInfo("Up vote!");
+
+        // log and send CloudWatch event
+        LogEvent(new BitcoinVoteEvent {
+            VoterId = Info.AppInstanceId,
+            Vote = true
+        });
+    }
+
+    protected void OnDownVoteClicked() {
+        LogInfo("Down vote!");
+
+        // log and send CloudWatch event
+        LogEvent(new BitcoinVoteEvent {
+            VoterId = Info.AppInstanceId,
+            Vote = false
+        });
+    }
+}

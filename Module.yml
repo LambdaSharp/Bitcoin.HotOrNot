@@ -1,0 +1,22 @@
+Module: Bitcoin.HotOrNot
+Items:
+
+  - Function: PublishBitcoinPriceFunction
+    Memory: 256
+    Timeout: 30
+    Sources:
+      - Schedule: rate(1 minute)
+
+  - App: VoteApp
+    Sources:
+      - EventBus: default
+        Pattern:
+          Source:
+            - Bitcoin.HotOrNot::PublishBitcoinPriceFunction
+            - Bitcoin.HotOrNot::VoteApp
+
+  - Variable: VoteAppWebsiteUrl
+    Description: VoteApp Website URL
+    Scope: public
+    Value: !GetAtt VoteApp::Bucket.Outputs.WebsiteUrl
+

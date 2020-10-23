@@ -1,6 +1,6 @@
 ![Bitcoin Hot-Or-Not App](Media/BitcoinHotOrNot.png)
 
-# LambdaSharp - Serverless Bitcoin Hot-or-Not App
+# Serverless Bitcoin Hot-or-Not App
 
 Learn more about LambdaSharp at https://lambdasharp.net.
 

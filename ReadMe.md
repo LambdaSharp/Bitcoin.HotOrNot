@@ -1,6 +1,6 @@
 ![Bitcoin Hot-Or-Not App](Media/BitcoinHotOrNot.png)
 
-# LambdaSharp - Bitcoin Hot-or-Not App
+# LambdaSharp - Serverless Bitcoin Hot-or-Not App
 
 Learn more about LambdaSharp at https://lambdasharp.net.
 
@@ -260,6 +260,6 @@ protected void OnBitcoinVote(BitcoinVoteEvent voteEvent) {
 
 ## Conclusion
 
-Building Blazor WebAssembly apps, which integrate with Amazon EventBridge, is now as easy as it is for Lambda functions. In addition, Blazor apps are automatically hosted on S3 and have CloudWatch logging capabilities.
+Building Blazor WebAssembly apps, which integrate with Amazon EventBridge, is now as easy as it is for Lambda functions. In addition, Blazor apps are automatically hosted on S3 and have CloudWatch logging capabilities. And it's all 100% serverless!
 
 ![LambdaSharp App](Media/LambdaSharpApp.png)

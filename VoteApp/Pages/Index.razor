@@ -29,22 +29,26 @@
 
 @code {
 
+    //--- Fields ---
+    private Dictionary<string, bool> _votes = new Dictionary<string, bool>();
+
     //--- Properties ---
     protected string BitcoinPrice { get; set; } = "(waiting for price)";
     protected bool IsDisabled { get; set; } = true;
     protected int UpVotes { get; set; }
     protected int DownVotes { get; set; }
-    private Dictionary<string, bool> _votes = new Dictionary<string, bool>();
 
     //--- Methods ---
     protected override void OnInitialized() {
         base.OnInitialized();
 
-        // subscribe to price and vote events
+        // subscribe to events from the Lambda function
         EventBus.SubscribeTo<BitcoinPriceEvent>(
             "Bitcoin.HotOrNot::PublishBitcoinPriceFunction",
             OnBitcoinPrice
         );
+
+        // subscribe to events from other app instances
         EventBus.SubscribeTo<BitcoinVoteEvent>(
             "Bitcoin.HotOrNot::VoteApp",
             OnBitcoinVote
@@ -68,7 +72,7 @@
         // register vote by voter ID
         _votes[voteEvent.VoterId] = voteEvent.Vote;
 
-        // counte up/down votes
+        // count up/down votes
         UpVotes = _votes.Values.Count(vote => vote);
         DownVotes = _votes.Values.Count(vote => !vote);
 

@@ -1,6 +1,8 @@
-![Bitcoin](Media/Bitcoin.jpg)
+![Bitcoin Hot-Or-Not App](Media/BitcoinHotOrNot.png)
 
 # LambdaSharp - Bitcoin Hot-or-Not App
+
+Learn more about LambdaSharp at https://lambdasharp.net.
 
 ## Prerequisites
 
@@ -9,7 +11,8 @@
 1. Install .NET Core SDK 3.1.401+ (any platform Windows, macOS, or Linux)
 1. Install an IDE, such as [Visual Studio Code](https://code.visualstudio.com/)
 
-## Step 1: Getting Started
+
+## Steps to Deploy
 
 Install the LambdaSharp CLI:
 ```bash
@@ -31,37 +34,55 @@ Switch into the cloned folder:
 cd Bitcoin.HotOrNot
 ```
 
-## Step 2: Create Lambda function to fetch Bitcoin price
-
-Create a new LambdaSharp module, which describes the required serverless infrastructure:
-```bash
-lash new module Bitcoin.HotOrNot
-```
-
-Add a Lambda function configured for an [EventBridge Schedule Rule](https://docs.aws.amazon.com/eventbridge/latest/userguide/scheduled-events.html) to the module:
-```bash
-lash new function --type schedule PublishBitcoinPriceFunction
-```
-
-Update Lambda function to fetch the Bitcoin price from the [CoinDesk API](https://api.coindesk.com/v1/bpi/currentprice.json) and publish it to CloudWatch EvenBridge event bus.
-
-Define a C# class for the CloudWatch event and use [LogEvent(...)](https://lambdasharp.net/sdk/LambdaSharp.ALambdaFunction.html#LambdaSharp_ALambdaFunction_LogEvent__1___0_System_Collections_Generic_IEnumerable_System_String__) method to emit it to CloudWatch EventBridge. _(Hint: consider putting this class in a location so it can be shared with the frontend code later.)_
-```csharp
-public class BitcoinPriceEvent {
-
-    //--- Properties ---
-    public double Price { get; set; }
-}
-```
-
-Deploy module with Lambda function:
+Deploy the Blazor WebAssembly app with Lambda backend:
 ```bash
 lash deploy
 ```
 
-Log into the [AWS Console](https://aws.amazon.com/console/) and confirm the event shows up in the CloudWatch log group for the `PublishBitcoinPriceFunction` Lambda function.
 
-<details><summary>Sample JSON Response</summary>
+## Module File
+
+The _Module.yml_ file acts both as a CloudFormation template and .NET Core solution file for building functions and apps.
+
+```yaml
+Module: Bitcoin.HotOrNot
+Items:
+
+  # Build and deploy .NET Lambda function
+  - Function: PublishBitcoinPriceFunction
+    Memory: 256
+    Timeout: 30
+    Sources:
+      # Invoke Lambda function once per minute
+      - Schedule: rate(1 minute)
+
+  # Build and deploy Blazor WebAssembly app
+  - App: VoteApp
+    Sources:
+      # Forward the following events from EventBridge to the app event bus
+      - EventBus: default
+        Pattern:
+          Source:
+            - Bitcoin.HotOrNot::PublishBitcoinPriceFunction
+            - Bitcoin.HotOrNot::VoteApp
+
+  # Export the URL for the deployed app
+  - Variable: VoteAppWebsiteUrl
+    Description: VoteApp Website URL
+    Scope: public
+    Value: !GetAtt VoteApp::Bucket.Outputs.WebsiteUrl
+```
+
+Note how the `App` section declares which events from EventBridge are forward to the _LambdaSharp App EventBus_. Once the app is instantiated in the browser, it can select which events in the _LambdaSharp App EventBus_ to subscribe to. This two stage process restricts what events are made available to the _LambdaSharp App EventBus_ while optimizing what events are sent over the WebSocket connection depending on the context of the app instance.
+
+![LambdaSharp App EventBus](Media/LambdaSharpAppEventBus.png)
+
+
+## Lambda Function
+
+The `PublishBitcoinPriceFunction` Lambda function is automatically invoked every minute to fetch the price from a Bitcoin API and publish it to the default event bus using the `BitcoinPriceEvent` class.
+
+<details><summary>Sample JSON Bitcoin API Response</summary>
 
 ```json
 {
@@ -99,18 +120,37 @@ Log into the [AWS Console](https://aws.amazon.com/console/) and confirm the even
 ```
 </details>
 
+```csharp
+public sealed class Function : ALambdaScheduleFunction {
 
-## Step 3: Create Blazor WebAssembly app to show Bitcoin price
+    //--- Methods ---
+    public override async Task InitializeAsync(LambdaConfig config) { }
 
-Add a Blazor WebAssembly project to the module:
-```bash
-lash new app VoteApp
+    public override async Task ProcessEventAsync(LambdaScheduleEvent schedule) {
+        var response = await HttpClient.GetAsync("https://api.coindesk.com/v1/bpi/currentprice.json");
+        if(response.IsSuccessStatusCode) {
+            LogInfo("Fetched price from API");
+
+            // read price from API response
+            dynamic json = JObject.Parse(await response.Content.ReadAsStringAsync());
+            var price = (double)json.bpi.USD.rate_float;
+
+            // log and send CloudWatch event
+            LogEvent(new BitcoinPriceEvent {
+                Price = price
+            });
+        } else {
+            LogInfo("Unable to fetch price");
+        }
+    }
+}
 ```
 
-Update app project by editing _Index.razor_ page with the UI code below.
+## Blazor WebAssembly App
 
-<details><summary>Sample Blazorise UI Layout</summary>
+The majority of the logic for the `VoteApp` is in the _Index.razor_ file.
 
+The layout is basic, with 3 dynamic properties (`BitcoinPrice`, `UpVotes`, and `DownVotes`) and 2 callbacks (`OnUpVoteClicked` and `OnDownVoteClicked`).
 ```html
 @page "/"
 
@@ -136,68 +176,90 @@ Update app project by editing _Index.razor_ page with the UI code below.
         </CardBody>
     </Card>
 </Container>
+```
 
+The basic code defines the aforementioned properties and callbacks, which emit the voting events.
+```csharp
 @code {
+
+    //--- Fields ---
+    private Dictionary<string, bool> _votes = new Dictionary<string, bool>();
 
     //--- Properties ---
     protected string BitcoinPrice { get; set; } = "(waiting for price)"
     protected bool IsDisabled { get; set; } = true;
     protected int UpVotes { get; set; }
     protected int DownVotes { get; set; }
-}
-```
-</details>
 
-Redeploy the module:
-```bash
-lash deploy
-```
+    protected void OnUpVoteClicked() {
+        LogInfo("Up vote!");
 
-## Step 4: Forward CloudWatch events to the Blazor app
+        // log and send CloudWatch event
+        LogEvent(new BitcoinVoteEvent {
+            VoterId = Info.AppInstanceId,
+            Vote = true
+        });
+    }
 
-Update the `Module.yml` file to forward CloudWatch events to the LambdaSharp App EventBus for the `VoteApp`.
+    protected void OnDownVoteClicked() {
+        LogInfo("Down vote!");
 
-<details><summary>LambdaSharp App Event Source</summary>
-
-```yaml
-  - App: VoteApp
-    Sources:
-      - EventBus: default
-        Pattern:
-          Source:
-            - Bitcoin.HotOrNot::PublishBitcoinPriceFunction
-            - Bitcoin.HotOrNot::VoteApp
-```
-</details>
-
-Define a `BitcoinVoteEvent` class to trigger when the up/down vote buttons are clicked and use `LogEvent(...)` to emit the vote. _(Hint: use `Info.AppInstanceId` as the voter ID since it's unique per app instance.)_
-```csharp
-public class BitcoinVoteEvent {
-
-    //--- Properties ---
-    public string VoterId { get; set; }
-    public bool Vote { get; set; }
+        // log and send CloudWatch event
+        LogEvent(new BitcoinVoteEvent {
+            VoterId = Info.AppInstanceId,
+            Vote = false
+        });
+    }
 }
 ```
 
-Update the code in _Index.razor_ to subscribe to the events and bind them to their respective methods (`OnBitcoinPriceUpdated(BitcoinPriceEvent)` and `OnBitcoinVote(BitcoinVoteEvent)`):
+The app needs to declare the events it wants to subscribe to and the corresponding callbacks. The `StateHasChanged()` method is invoke to re-render the Blazor UI after an event is received.
+
 ```csharp
 protected override void OnInitialized() {
-    LogInfo("Initialzing component...");
     base.OnInitialized();
 
-    EventBus.SubscribeTo<BitcoinPriceEvent>("Bitcoin.HotOrNot::PublishBitcoinPriceFunction", OnBitcoinPriceUpdated);
-    EventBus.SubscribeTo<BitcoinVoteEvent>("Bitcoin.HotOrNot::VoteApp", OnBitcoinVote);
+    // subscribe to events from the Lambda function
+    EventBus.SubscribeTo<BitcoinPriceEvent>(
+        "Bitcoin.HotOrNot::PublishBitcoinPriceFunction",
+        OnBitcoinPrice
+    );
 
-    LogInfo("Component initialized");
+    // subscribe to events from other app instances
+    EventBus.SubscribeTo<BitcoinVoteEvent>(
+        "Bitcoin.HotOrNot::VoteApp",
+        OnBitcoinVote
+    );
+}
+
+protected void OnBitcoinPrice(BitcoinPriceEvent priceEvent) {
+
+    // update price information
+    BitcoinPrice = priceEvent.Price.ToString("C2");
+
+    // enable voting buttons
+    IsDisabled = false;
+
+    // refresh UI state
+    StateHasChanged();
+}
+
+protected void OnBitcoinVote(BitcoinVoteEvent voteEvent) {
+
+    // register vote by voter ID
+    _votes[voteEvent.VoterId] = voteEvent.Vote;
+
+    // count up/down votes
+    UpVotes = _votes.Values.Count(vote => vote);
+    DownVotes = _votes.Values.Count(vote => !vote);
+
+    // refresh UI state
+    StateHasChanged();
 }
 ```
 
-Make sure to invoke `StateHasChanged()` method to indicate to Blazor the UI needs to be redrawn.
+## Conclusion
 
-## Step 5: Deploy final Blazor app
+Building Blazor WebAssembly apps, which integrate with Amazon EventBridge, is now as easy as it is for Lambda functions. In addition, Blazor apps are automatically hosted on S3 and have CloudWatch logging capabilities.
 
-Deploy the final code and enjoy!
-```bash
-lash deploy
-```
+![LambdaSharp App](Media/LambdaSharpApp.png)

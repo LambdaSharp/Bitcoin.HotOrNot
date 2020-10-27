@@ -52,13 +52,6 @@ public class BitcoinPriceEvent {
 }
 ```
 
-Deploy module with Lambda function:
-```bash
-lash deploy
-```
-
-Log into the [AWS Console](https://aws.amazon.com/console/) and confirm the event shows up in the CloudWatch log group for the `PublishBitcoinPriceFunction` Lambda function.
-
 <details><summary>Sample JSON Response</summary>
 
 ```json
@@ -98,6 +91,14 @@ Log into the [AWS Console](https://aws.amazon.com/console/) and confirm the even
 </details>
 
 
+Deploy module with Lambda function:
+```bash
+lash deploy
+```
+
+Log into the [AWS Console](https://aws.amazon.com/console/) and confirm the event shows up in the CloudWatch log group for the `PublishBitcoinPriceFunction` Lambda function.
+
+
 ## Step 3: Create Blazor WebAssembly app to show Bitcoin price
 
 Add a Blazor WebAssembly project to the module:
@@ -125,10 +126,10 @@ Update app project by editing _Index.razor_ page with the UI code below.
             <CardTitle Size="5">@BitcoinPrice</CardTitle>
         </CardBody>
         <CardBody>
-            <Button Size="ButtonSize.Large" Color="Color.Primary" Clicked="@OnUpVoteClicked" Disabled="@IsDisabled">
+            <Button Size="ButtonSize.Large" Color="Color.Primary" Clicked="@OnUpVoteClicked">
                 <Icon Name="IconName.ThumbsUp" /><br/>(@UpVotes)
             </Button>
-            <Button Size="ButtonSize.Large" Color="Color.Primary" Clicked="@OnDownVoteClicked" Disabled="@IsDisabled">
+            <Button Size="ButtonSize.Large" Color="Color.Primary" Clicked="@OnDownVoteClicked">
                 <Icon Name="IconName.ThumbsDown" /><br/>(@DownVotes)
             </Button>
         </CardBody>
@@ -139,9 +140,17 @@ Update app project by editing _Index.razor_ page with the UI code below.
 
     //--- Properties ---
     protected string BitcoinPrice { get; set; } = "(waiting for price)"
-    protected bool IsDisabled { get; set; } = true;
     protected int UpVotes { get; set; }
     protected int DownVotes { get; set; }
+
+    //--- Methods ---
+    protected void OnUpVoteClicked() {
+        LogInfo("Up vote clicked!");
+    }
+
+    protected void OnDownVoteClicked() {
+        LogInfo("Down vote clicked!");
+    }
 }
 ```
 </details>
@@ -162,9 +171,12 @@ Update the `Module.yml` file to forward CloudWatch events to the LambdaSharp App
     Sources:
       - EventBus: default
         Pattern:
-          Source:
+          source:
             - Bitcoin.HotOrNot::PublishBitcoinPriceFunction
             - Bitcoin.HotOrNot::VoteApp
+          detail-type:
+            - Bitcoin.HotOrNot.Events.BitcoinPriceEvent
+            - Bitcoin.HotOrNot.Events.BitcoinVoteEvent
 ```
 </details>
 
@@ -181,7 +193,7 @@ public class BitcoinVoteEvent {
 Update the code in _Index.razor_ to subscribe to the events and bind them to their respective methods (`OnBitcoinPriceUpdated(BitcoinPriceEvent)` and `OnBitcoinVote(BitcoinVoteEvent)`):
 ```csharp
 protected override void OnInitialized() {
-    LogInfo("Initialzing component...");
+    LogInfo("Initializing component...");
     base.OnInitialized();
 
     EventBus.SubscribeTo<BitcoinPriceEvent>("Bitcoin.HotOrNot::PublishBitcoinPriceFunction", OnBitcoinPriceUpdated);

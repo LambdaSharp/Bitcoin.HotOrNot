@@ -1,5 +1,3 @@
-![Bitcoin](Media/Bitcoin.jpg)
-
 # LambdaSharp - Bitcoin Hot-or-Not App
 
 ## Prerequisites

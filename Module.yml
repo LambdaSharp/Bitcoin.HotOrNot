@@ -1,0 +1,36 @@
+# The Module Name is used as prefix for all contained resources.
+Module: Bitcoin.HotOrNot
+
+# The Module Version is shown in the CloudFormation stack and Lambda function descriptions.
+Version: 1.0-DEV
+
+# The Module Description is shown in the AWS CloudFormation console with the version number.
+Description: Bitcoin Hot-Or-Not Demo
+
+# The Items section defines values and resources for the module.
+Items:
+
+  - Variable: MyVariable
+    Description: Variable description
+    Value: A sample variable value for the module
+
+  - Function: PublishBitcoinPriceFunction
+    Description: TO-DO - update function description
+    Memory: 256
+    Timeout: 30
+    Sources:
+      - Schedule: rate(1 minute)
+
+  - App: VoteApp
+    Description: TO-DO - update app description
+    Sources:
+      - EventBus: default
+        Pattern:
+          Source:
+            - Bitcoin.HotOrNot::PublishBitcoinPriceFunction
+            - Bitcoin.HotOrNot::VoteApp
+
+  - Variable: VoteAppWebsiteUrl
+    Description: VoteApp Website URL
+    Scope: public
+    Value: !GetAtt VoteApp::Bucket.Outputs.WebsiteUrl

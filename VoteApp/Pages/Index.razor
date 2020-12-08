@@ -1,0 +1,74 @@
+@page "/"
+
+@using Bitcoin.HotOrNot.Common
+
+@inherits ALambdaComponent
+
+@inject LambdaSharp.App.LambdaSharpEventBusClient EventBus
+
+<Container Fluid="true">
+    <Card Margin="Margin.Is4.FromTop">
+        <CardHeader Padding="Padding.Is1.FromBottom">
+            <Heading Size="HeadingSize.Is4">Bitcoin Price</Heading>
+        </CardHeader>
+
+        <CardBody Padding="Padding.Is0.FromBottom">
+            <CardTitle Size="5">@BitcoinPrice</CardTitle>
+        </CardBody>
+
+        <CardBody>
+            <Button Size="ButtonSize.Large" Color="Color.Primary" Clicked="@OnUpVoteClicked">
+                <Icon Name="IconName.ThumbsUp" /><br/>(@UpVotes)
+            </Button>
+            <Button Size="ButtonSize.Large" Color="Color.Primary" Clicked="@OnDownVoteClicked">
+                <Icon Name="IconName.ThumbsDown" /><br/>(@DownVotes)
+            </Button>
+        </CardBody>
+    </Card>
+</Container>
+
+@code {
+
+    //--- Fields ---
+    private Dictionary<string, bool> _votes = new Dictionary<string, bool>();
+
+    //--- Properties ---
+    protected string BitcoinPrice { get; set; } = "(waiting for price)";
+    protected int UpVotes { get; set; }
+    protected int DownVotes { get; set; }
+
+    //--- Methods ---
+    protected void OnUpVoteClicked() {
+        LogInfo("Up vote clicked!");
+        LogEvent(new BitcoinVoteEvent {
+            VoterId = Info.AppInstanceId,
+            Vote = true
+        });
+    }
+
+    protected void OnDownVoteClicked() {
+        LogInfo("Down vote clicked!");
+        LogEvent(new BitcoinVoteEvent {
+            VoterId = Info.AppInstanceId,
+            Vote = false
+        });
+    }
+
+    protected override void OnInitialized() {
+        base.OnInitialized();
+        EventBus.SubscribeTo<BitcoinPriceEvent>("Bitcoin.HotOrNot::PublishBitcoinPriceFunction", OnPrice);
+        EventBus.SubscribeTo<BitcoinVoteEvent>("Bitcoin.HotOrNot::VoteApp", OnVote);
+    }
+
+    protected void OnPrice(BitcoinPriceEvent priceEvent) {
+        BitcoinPrice = priceEvent.Price.ToString("C2");
+        StateHasChanged();
+    }
+
+    protected void OnVote(BitcoinVoteEvent voteEvent) {
+        _votes[voteEvent.VoterId] = voteEvent.Vote;
+        UpVotes = _votes.Values.Count(vote => vote);
+        DownVotes = _votes.Values.Count(vote => !vote);
+        StateHasChanged();
+    }
+}

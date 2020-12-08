@@ -108,3 +108,17 @@ public class BitcoinPriceEvent {
     }
 }
 ```
+
+```csharp
+    protected void OnPrice(BitcoinPriceEvent priceEvent) {
+        BitcoinPrice = priceEvent.Price.ToString("C2");
+        StateHasChanged();
+    }
+
+    protected void OnVote(BitcoinVoteEvent voteEvent) {
+        _votes[voteEvent.VoterId] = voteEvent.Vote;
+        UpVotes = _votes.Values.Count(vote => vote);
+        DownVotes = _votes.Values.Count(vote => !vote);
+        StateHasChanged();
+    }
+```
